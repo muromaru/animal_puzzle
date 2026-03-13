@@ -1,100 +1,11 @@
 <!DOCTYPE html>
-
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Whose Foot</title>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    height: 100vh; overflow: hidden;
-    background: #f5f2ee;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    font-family: 'Noto Sans JP', sans-serif;
-    padding-bottom: 80px;
-  }
-
-.header { text-align: center; margin-bottom: clamp(40px, 8vh, 72px); animation: fadeUp 0.7s ease both; }
-.label { font-size: clamp(10px, 1.8vw, 12px); letter-spacing: 0.45em; color: #9a9792; text-transform: uppercase; margin-bottom: 14px; }
-h1 { font-family: ‘Lora’, serif; font-weight: 500; font-size: clamp(40px, 11vw, 70px); line-height: 1.0; color: #27231e; }
-h1 em { font-style: italic; font-weight: 400; color: #b85c3a; }
-.sub { margin-top: 12px; font-size: clamp(11px, 2.5vw, 14px); font-weight: 300; color: #9a9792; letter-spacing: 0.1em; }
-
-/* カードを見切れさせないよう overflow visible + padding で余白確保 */
-.cards-wrapper {
-padding: 12px 32px 20px;
-overflow: visible;
-animation: fadeUp 0.7s 0.12s ease both;
-}
-.cards { display: flex; gap: clamp(12px, 3vw, 24px); overflow: visible; }
-
-.card {
-width: clamp(140px, 40vw, 220px);
-text-decoration: none; color: inherit;
-background: #fff;
-border: 1px solid #e4e0db;
-border-radius: 10px;
-overflow: hidden;
-position: relative;
-transition: transform 0.32s cubic-bezier(0.34,1.3,0.64,1), box-shadow 0.32s;
--webkit-tap-highlight-color: transparent;
-}
-.card:hover {
-transform: translateY(-6px);
-box-shadow: 0 20px 40px rgba(184,92,58,0.15);
-}
-.card:focus { outline: none; }
-.card:focus:not(:focus-visible) { box-shadow: none; transform: none; }
-
-/* 上部カラーゾーン */
-.card-top {
-height: clamp(80px, 22vw, 120px);
-background: #f0ece7;
-display: flex; align-items: center; justify-content: center;
-position: relative; overflow: hidden;
-transition: background 0.35s;
-}
-.card:hover .card-top { background: #b85c3a; }
-
-/* B4要素：薄い大きな数字 */
-.card-bg-num {
-position: absolute;
-bottom: -18px; right: 6px;
-font-family: ‘Lora’, serif; font-weight: 600;
-font-size: clamp(60px, 17vw, 96px); line-height: 1;
-letter-spacing: -0.04em;
-color: rgba(0,0,0,0.06);
-pointer-events: none; user-select: none;
-transition: color 0.35s, transform 0.4s ease;
-}
-.card:hover .card-bg-num {
-color: rgba(255,255,255,0.12);
-transform: scale(1.05);
-}
-
-.card-top-emoji {
-font-size: clamp(28px, 8vw, 42px); position: relative; z-index: 1;
-transition: transform 0.4s cubic-bezier(0.34,1.5,0.64,1), filter 0.35s;
-filter: grayscale(0.3);
-}
-.card:hover .card-top-emoji { transform: scale(1.2) rotate(-8deg); filter: grayscale(0); }
-
-/* 下部テキストゾーン */
-.card-body { padding: clamp(12px, 3vw, 20px) clamp(14px, 3.5vw, 22px) clamp(14px, 3vw, 22px); }
-.card-num { font-family: ‘Lora’, serif; font-style: italic; font-size: clamp(10px, 1.8vw, 12px); color: #c5c2bc; margin-bottom: 4px; }
-.card-title { font-family: ‘Lora’, serif; font-weight: 600; font-size: clamp(20px, 5.5vw, 28px); color: #27231e; margin-bottom: 3px; transition: color 0.3s; }
-.card:hover .card-title { color: #b85c3a; }
-.card-desc { font-size: clamp(10px, 2vw, 12px); font-weight: 300; letter-spacing: 0.1em; color: #9a9792; }
-
-.paw { margin-top: clamp(28px, 5vh, 44px); font-size: clamp(13px, 3vw, 17px); opacity: 0.14; animation: fadeIn 0.8s 0.25s ease both; }
-
-@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-</style>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whose Foot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
   <div class="header">
@@ -105,7 +16,7 @@ filter: grayscale(0.3);
 
   <div class="cards-wrapper">
     <div class="cards">
-      <a href="game.html" class="card">
+      <a href="game/" class="card">
         <div class="card-top">
           <div class="card-bg-num">01</div>
           <span class="card-top-emoji">🎮</span>
@@ -116,7 +27,7 @@ filter: grayscale(0.3);
           <div class="card-desc">通常プレイ版</div>
         </div>
       </a>
-      <a href="strategy.html" class="card">
+      <a href="strategy/" class="card">
         <div class="card-top">
           <div class="card-bg-num">02</div>
           <span class="card-top-emoji">🧠</span>
@@ -131,13 +42,6 @@ filter: grayscale(0.3);
   </div>
 
   <div class="paw">🐾</div>
-  <script>
-    // カード以外をタップしたらフォーカス（活性化状態）を解除
-    document.addEventListener('pointerdown', function(e) {
-      if (!e.target.closest('.card')) {
-        document.activeElement && document.activeElement.blur();
-      }
-    });
-  </script>
+  <script src="assets/js/main.js"></script>
 </body>
 </html>
