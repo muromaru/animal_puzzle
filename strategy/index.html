@@ -6,63 +6,82 @@
 <title>Whose foot - Strategy</title>
 
 <style>
-
-body{
-font-family:-apple-system,sans-serif;
-background:#f5f5f5;
-text-align:center;
+body {
+  font-family: -apple-system, sans-serif;
+  background: #f5f5f5;
+  text-align: center;
 }
 
-h1{margin:6px 0 0;}
-h2{margin:0 0 10px;font-weight:normal;}
+h1 { margin: 6px 0 0; }
+h2 { margin: 0 0 10px; font-weight: normal; }
 
-#board{
-display:grid;
-grid-template-columns:repeat(3,1fr);
-gap:10px;
-width:300px;
-margin:10px auto;
+#board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 300px;
+  margin: 10px auto;
 }
 
-.cell{
-background:white;
-border:2px solid #333;
-height:80px;
-font-size:26px;
-display:flex;
-align-items:center;
-justify-content:center;
-position:relative;
-cursor:pointer;
+.cell {
+  background: white;
+  border: 2px solid #333;
+  height: 80px;
+  font-size: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
 }
 
-.evalCell{
-background:rgba(255,0,0,0.07);
+.evalCell {
+  background: rgba(255, 0, 0, 0.07);
 }
 
-.evalPercent{
-position:absolute;
-inset:0;
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:16px;
-font-weight:bold;
-color:#b00000;
-pointer-events:none;
+.evalPercent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #b00000;
+  pointer-events: none;
 }
 
-#cardSelect{
-margin:10px auto;
-font-size:26px;
+#cardSelect {
+  margin: 10px auto;
+  font-size: 26px;
 }
 
-button{
-padding:10px 20px;
-font-size:16px;
-margin-top:10px;
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+  margin-top: 10px;
 }
 
+.back-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: #9a9792;
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  transition: color 0.2s;
+  z-index: 3000;
+}
+.back-btn:hover { color: #27231e; }
+.back-btn::before {
+  content: '←';
+  font-size: 16px;
+}
 </style>
 </head>
 
@@ -74,8 +93,8 @@ margin-top:10px;
 <h2>Strategy Lab</h2>
 
 <div>
-現在カード
-<div id="cardSelect"></div>
+  現在カード
+  <div id="cardSelect"></div>
 </div>
 
 <div id="board"></div>
@@ -83,289 +102,155 @@ margin-top:10px;
 <button onclick="evaluateBoard()">評価する</button>
 
 <script>
+const animals = ["🐱","🐶","🐒","🐦","🐸"];
 
-const animals=["🐱","🐶","🐒","🐦","🐸"];
+let board = Array(9).fill(null);
+let currentCard = { animal: "🐱", type: "BODY" };
 
-let board=Array(9).fill(null);
+const boardDiv = document.getElementById("board");
+const cardSelect = document.getElementById("cardSelect");
 
-let currentCard={animal:"🐱",type:"BODY"};
-
-const boardDiv=document.getElementById("board");
-const cardSelect=document.getElementById("cardSelect");
-
-function init(){
-
-renderBoard();
-renderCardSelect();
-
+function init() {
+  renderBoard();
+  renderCardSelect();
 }
 
-function renderBoard(){
-
-boardDiv.innerHTML="";
-
-board.forEach((cell,i)=>{
-
-const div=document.createElement("div");
-div.className="cell";
-
-div.innerText=formatCell(cell);
-
-div.onclick=()=>cycleCell(i);
-
-boardDiv.appendChild(div);
-
-});
-
+function renderBoard() {
+  boardDiv.innerHTML = "";
+  board.forEach((cell, i) => {
+    const div = document.createElement("div");
+    div.className = "cell";
+    div.innerText = formatCell(cell);
+    div.onclick = () => cycleCell(i);
+    boardDiv.appendChild(div);
+  });
 }
 
-function formatCell(c){
-
-if(!c)return "";
-
-if(c.type==="JOKER")return "🃏";
-
-if(c.type==="BODY")return c.animal;
-
-if(c.type==="FOOT")return c.animal+"🐾";
-
+function formatCell(c) {
+  if (!c) return "";
+  if (c.type === "JOKER") return "🃏";
+  if (c.type === "BODY") return c.animal;
+  if (c.type === "FOOT") return c.animal + "🐾";
 }
 
-function cycleCell(i){
-
-const c=board[i];
-
-if(!c){
-
-board[i]={animal:"🐱",type:"BODY"};
-
-}else if(c.type==="BODY"){
-
-board[i]={animal:c.animal,type:"FOOT"};
-
-}else if(c.type==="FOOT"){
-
-board[i]={animal:"🃏",type:"JOKER"};
-
-}else{
-
-board[i]=null;
-
+function cycleCell(i) {
+  const c = board[i];
+  if (!c) {
+    board[i] = { animal: "🐱", type: "BODY" };
+  } else if (c.type === "BODY") {
+    board[i] = { animal: c.animal, type: "FOOT" };
+  } else if (c.type === "FOOT") {
+    board[i] = { animal: "🃏", type: "JOKER" };
+  } else {
+    board[i] = null;
+  }
+  renderBoard();
 }
 
-renderBoard();
-
+function renderCardSelect() {
+  cardSelect.innerHTML = "";
+  animals.forEach(a => {
+    ["BODY", "FOOT"].forEach(t => {
+      const span = document.createElement("span");
+      span.style.margin = "6px";
+      span.style.cursor = "pointer";
+      span.innerText = t === "BODY" ? a : a + "🐾";
+      span.onclick = () => {
+        currentCard = { animal: a, type: t };
+        highlightCard();
+      };
+      cardSelect.appendChild(span);
+    });
+  });
+  const joker = document.createElement("span");
+  joker.innerText = "🃏";
+  joker.style.margin = "6px";
+  joker.style.cursor = "pointer";
+  joker.onclick = () => {
+    currentCard = { animal: "🃏", type: "JOKER" };
+    highlightCard();
+  };
+  cardSelect.appendChild(joker);
+  highlightCard();
 }
 
-function renderCardSelect(){
-
-cardSelect.innerHTML="";
-
-animals.forEach(a=>{
-
-["BODY","FOOT"].forEach(t=>{
-
-const span=document.createElement("span");
-
-span.style.margin="6px";
-span.style.cursor="pointer";
-
-span.innerText=t==="BODY"?a:a+"🐾";
-
-span.onclick=()=>{
-
-currentCard={animal:a,type:t};
-
-highlightCard();
-
-};
-
-cardSelect.appendChild(span);
-
-});
-
-});
-
-const joker=document.createElement("span");
-
-joker.innerText="🃏";
-
-joker.style.margin="6px";
-joker.style.cursor="pointer";
-
-joker.onclick=()=>{
-
-currentCard={animal:"🃏",type:"JOKER"};
-
-highlightCard();
-
-};
-
-cardSelect.appendChild(joker);
-
-highlightCard();
-
+function highlightCard() {
+  [...cardSelect.children].forEach(el => { el.style.opacity = "0.3"; });
+  const label = formatCell(currentCard);
+  [...cardSelect.children].forEach(el => {
+    if (el.innerText === label) el.style.opacity = "1";
+  });
 }
 
-function highlightCard(){
-
-[...cardSelect.children].forEach(el=>{
-
-el.style.opacity="0.3";
-
-});
-
-const label=formatCell(currentCard);
-
-[...cardSelect.children].forEach(el=>{
-
-if(el.innerText===label){
-
-el.style.opacity="1";
-
+function neighbors(i) {
+  return [
+    ...(i % 3 !== 0 ? [i - 1] : []),
+    ...(i % 3 !== 2 ? [i + 1] : []),
+    ...(i >= 3 ? [i - 3] : []),
+    ...(i < 6 ? [i + 3] : [])
+  ];
 }
 
-});
-
+function evaluateImmediateScore(index, card) {
+  let gain = 0;
+  board[index] = card;
+  neighbors(index).forEach(n => {
+    const o = board[n];
+    if (!o || o.type === "JOKER" || card.type === "JOKER") return;
+    if (o.animal === card.animal && o.type !== card.type) gain += 100;
+  });
+  const lines = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8]
+  ];
+  lines.forEach(l => {
+    if (!l.includes(index)) return;
+    if (l.every(i => board[i] && board[i].animal === card.animal && board[i].type === card.type)) gain += 60;
+  });
+  board[index] = null;
+  return gain;
 }
 
-function neighbors(i){
-
-return[
-...(i%3!==0?[i-1]:[]),
-...(i%3!==2?[i+1]:[]),
-...(i>=3?[i-3]:[]),
-...(i<6?[i+3]:[])
-];
-
+function positionalPenalty(index) {
+  let p = 0;
+  const near = neighbors(index).filter(n => board[n]).length;
+  if (near >= 3) p += 20;
+  if ([0,2,6,8].includes(index)) p += 5;
+  return p;
 }
 
-function evaluateImmediateScore(index,card){
-
-let gain=0;
-
-board[index]=card;
-
-neighbors(index).forEach(n=>{
-
-const o=board[n];
-
-if(!o||o.type==="JOKER"||card.type==="JOKER")return;
-
-if(o.animal===card.animal&&o.type!==card.type){
-
-gain+=100;
-
+function evaluateBoard() {
+  let raw = Array(9).fill(null);
+  let best = -Infinity;
+  for (let i = 0; i < 9; i++) {
+    if (board[i]) continue;
+    const v = evaluateImmediateScore(i, currentCard) - positionalPenalty(i);
+    raw[i] = v;
+    best = Math.max(best, v);
+  }
+  renderEval(raw);
 }
 
-});
-
-const lines=[
-[0,1,2],[3,4,5],[6,7,8],
-[0,3,6],[1,4,7],[2,5,8]
-];
-
-lines.forEach(l=>{
-
-if(!l.includes(index))return;
-
-if(
-l.every(i=>
-board[i]&&
-board[i].animal===card.animal&&
-board[i].type===card.type
-)
-){
-
-gain+=60;
-
-}
-
-});
-
-board[index]=null;
-
-return gain;
-
-}
-
-function positionalPenalty(index){
-
-let p=0;
-
-const near=neighbors(index).filter(n=>board[n]).length;
-
-if(near>=3)p+=20;
-
-if([0,2,6,8].includes(index))p+=5;
-
-return p;
-
-}
-
-function evaluateBoard(){
-
-let raw=Array(9).fill(null);
-
-let best=-Infinity;
-
-for(let i=0;i<9;i++){
-
-if(board[i])continue;
-
-const v=
-evaluateImmediateScore(i,currentCard)
--positionalPenalty(i);
-
-raw[i]=v;
-
-best=Math.max(best,v);
-
-}
-
-renderEval(raw);
-
-}
-
-function renderEval(raw){
-
-const values=raw.filter(v=>v!==null);
-
-if(values.length===0)return;
-
-const min=Math.min(...values);
-const max=Math.max(...values);
-
-for(let i=0;i<9;i++){
-
-const cell=boardDiv.children[i];
-
-cell.classList.remove("evalCell");
-
-cell.querySelector(".evalPercent")?.remove();
-
-if(raw[i]===null)continue;
-
-const percent=max===min
-?100
-:Math.round((raw[i]-min)/(max-min)*100);
-
-cell.classList.add("evalCell");
-
-const label=document.createElement("div");
-
-label.className="evalPercent";
-
-label.innerText=percent+"%";
-
-cell.appendChild(label);
-
-}
-
+function renderEval(raw) {
+  const values = raw.filter(v => v !== null);
+  if (values.length === 0) return;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  for (let i = 0; i < 9; i++) {
+    const cell = boardDiv.children[i];
+    cell.classList.remove("evalCell");
+    cell.querySelector(".evalPercent")?.remove();
+    if (raw[i] === null) continue;
+    const percent = max === min ? 100 : Math.round((raw[i] - min) / (max - min) * 100);
+    cell.classList.add("evalCell");
+    const label = document.createElement("div");
+    label.className = "evalPercent";
+    label.innerText = percent + "%";
+    cell.appendChild(label);
+  }
 }
 
 init();
-
 </script>
 
 </body>
