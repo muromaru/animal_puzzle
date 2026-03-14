@@ -121,7 +121,10 @@ function renderBoard() {
     const div = document.createElement("div");
     div.className = "cell";
     div.innerText = formatCell(cell);
-    div.onclick = () => cycleCell(i);
+    div.onclick = () => {
+    cycleCell(i);
+    evaluateBoard(); // セル変更時に評価を自動実行
+};
     boardDiv.appendChild(div);
   });
 }
