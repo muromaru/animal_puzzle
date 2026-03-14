@@ -500,7 +500,7 @@ function evaluateBoard() {
   const raw = Array(9).fill(null);
   for (let i = 0; i < 9; i++) {
     if (board[i]) continue;
-    raw[i] = evalScore(i, currentCard) - penalty(i);
+   raw[i] = evaluateMove(i,currentCard);
   }
   const vals = raw.filter(v => v !== null);
   if (!vals.length) return;
@@ -515,6 +515,37 @@ function evaluateBoard() {
     lbl.innerText = pct + "%";
     cell.appendChild(lbl);
   }
+}
+
+// ===== AI =====
+
+function evaluateMove(index, card){
+  const immediate = evalScore(index, card) - penalty(index);
+  board[index] = card;
+  let futureEV = 0;
+  const cards = [];
+  animals.forEach(a=>{
+    cards.push({animal:a,type:"BODY"});
+    cards.push({animal:a,type:"FOOT"});
+  });
+  cards.push({animal:"🃏",type:"JOKER"});
+  cards.forEach(c=>{
+    const k = cardKey(c);
+    const count = remaining[k] || 0;
+    const total = totalRemaining();
+    if(count===0 || total===0) return;
+    const prob = count/total;
+    let best = -Infinity;
+    for(let i=0;i<9;i++){
+      if(board[i]) continue;
+      const score = evalScore(i,c) - penalty(i);
+      if(score>best) best = score;
+    }
+    if(best>-Infinity) futureEV += best * prob;
+  });
+  board[index] = null;
+  return immediate + futureEV*0.6;
+
 }
 
 init();
