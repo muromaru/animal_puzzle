@@ -1,200 +1,471 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Whose foot - Strategy</title>
-
 <style>
+* { box-sizing: border-box; }
+
 body {
-  font-family: -apple-system, sans-serif;
-  background: #f5f5f5;
-  text-align: center;
+font-family: -apple-system, sans-serif;
+background: #f5f5f5;
+text-align: center;
+margin: 0;
+padding: 0;
+overflow: hidden;
+height: 100vh;
 }
 
 h1 { margin: 6px 0 0; }
-h2 { margin: 0 0 10px; font-weight: normal; }
+h2 { margin: 0 0 6px; font-weight: normal; }
 
-#board {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  width: 300px;
-  margin: 10px auto;
-}
-
-.cell {
-  background: white;
-  border: 2px solid #333;
-  height: 80px;
-  font-size: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-}
-
-.evalCell {
-  background: rgba(255, 0, 0, 0.07);
-}
-
-.evalPercent {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: bold;
-  color: #b00000;
-  pointer-events: none;
-}
-
-#cardSelect {
-  margin: 10px auto;
-  font-size: 26px;
-}
-
-button {
-  padding: 10px 20px;
-  font-size: 16px;
-  margin-top: 10px;
-}
-
+/* ===== 戻るボタン ===== */
 .back-btn {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-  color: #9a9792;
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.1em;
-  transition: color 0.2s;
-  z-index: 3000;
+position: fixed;
+top: 20px; left: 20px;
+display: flex; align-items: center; gap: 6px;
+text-decoration: none; color: #9a9792;
+font-size: 13px; font-weight: 300; letter-spacing: 0.1em;
+transition: color 0.2s; z-index: 3000;
 }
 .back-btn:hover { color: #27231e; }
-.back-btn::before {
-  content: '←';
-  font-size: 16px;
-}
-</style>
-</head>
+.back-btn::before { content: ‘←’; font-size: 16px; }
 
+/* ===== 山札エリア ===== */
+#deckArea { margin: 4px auto 2px; }
+#deckLabel { font-size: 11px; color: #888; margin-bottom: 2px; }
+#deckWrap {
+display: inline-flex; flex-direction: column;
+align-items: center; cursor: pointer;
+}
+#deck { font-size: 44px; line-height: 1; user-select: none; transition: transform 0.15s; }
+#deckWrap:hover #deck { transform: scale(1.1); }
+#deckSubLabel { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+/* ===== ボード ===== */
+#board {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 10px; width: 300px; margin: 4px auto;
+}
+.cell {
+background: white; border: 2px solid #333;
+height: 80px; font-size: 26px;
+display: flex; align-items: center; justify-content: center;
+position: relative; transition: background 0.15s, border-color 0.15s;
+cursor: default;
+}
+.cell.over { background: #fff9c4; border-color: #f9a825; border-style: dashed; }
+.cell.occupied { cursor: pointer; }
+.evalCell { background: rgba(255,0,0,0.06) !important; }
+.evalPercent {
+position: absolute; inset: 0;
+display: flex; align-items: center; justify-content: center;
+font-size: 15px; font-weight: bold; color: #b00000; pointer-events: none;
+}
+
+/* ===== カード一覧 ===== */
+#cardDeck { width: 320px; margin: 0 auto; }
+#cardDeck h3 {
+font-size: 11px; color: #888; letter-spacing: 0.1em;
+margin: 4px 0 4px; text-transform: uppercase;
+}
+
+/* 4列グリッド */
+#cardTiles {
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 6px;
+}
+
+/* カードタイル */
+.cardTile {
+background: white; border: 2px solid #ddd; border-radius: 8px;
+padding: 6px 2px 5px;
+display: flex; flex-direction: column; align-items: center;
+cursor: grab; user-select: none;
+transition: border-color 0.15s, box-shadow 0.15s, opacity 0.2s, transform 0.15s;
+position: relative;
+}
+.cardTile:active { cursor: grabbing; }
+.cardTile:hover:not(.empty) {
+border-color: #ff9800;
+box-shadow: 0 2px 8px rgba(255,152,0,0.25);
+transform: translateY(-2px);
+}
+.cardTile.empty { opacity: 0.28; cursor: default; pointer-events: none; }
+.cardTile.selected { border-color: #ff9800; background: #fff8f0; box-shadow: 0 2px 8px rgba(255,152,0,0.3); }
+.cardTile.dragging-src { opacity: 0.35; }
+
+.cardTile .cardEmoji { font-size: 20px; line-height: 1.2; }
+.cardTile .cardType { font-size: 8px; color: #aaa; margin-top: 1px; letter-spacing: 0.04em; }
+.cardTile .cardCount { font-size: 10px; font-weight: bold; color: #555; margin-top: 2px; }
+.cardTile .cardProb { font-size: 10px; color: #ff9800; font-weight: bold; margin-top: 1px; }
+
+/* ===== ゴースト ===== */
+#ghost {
+position: fixed; pointer-events: none; z-index: 9999;
+font-size: 28px; background: white;
+border: 2px solid #ff9800; border-radius: 8px;
+padding: 6px 10px; opacity: 0.85; display: none;
+transform: translate(-50%, -50%);
+box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* ===== オーバーレイ ===== */
+#overlay {
+position: fixed; inset: 0; background: rgba(0,0,0,.55);
+display: none; align-items: center; justify-content: center; z-index: 2000;
+}
+#popup {
+background: white; padding: 22px 24px;
+border-radius: 14px; width: 300px; position: relative;
+}
+#popup h3 { margin: 0 0 12px; font-size: 15px; }
+#popupClose {
+position: absolute; top: -10px; right: -10px;
+width: 30px; height: 30px; border-radius: 50%;
+background: #000; color: #fff; border: none;
+font-size: 16px; font-weight: bold; line-height: 30px;
+text-align: center; cursor: pointer; padding: 0;
+}
+#popupClose:hover { opacity: 0.75; }
+
+.deckGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.deckOption {
+display: flex; flex-direction: column; align-items: center;
+border: 2px solid #eee; border-radius: 8px; padding: 6px 4px;
+cursor: pointer; transition: border-color .2s, background .2s; font-size: 22px;
+}
+.deckOption .dLabel { font-size: 9px; color: #aaa; margin-top: 2px; }
+.deckOption .dCount { font-size: 10px; color: #888; }
+.deckOption:hover:not(.dEmpty) { border-color: #ff9800; background: #fff8f0; }
+.deckOption.dActive { border-color: #ff9800; background: #fff3e0; }
+.deckOption.dEmpty { opacity: 0.25; cursor: default; }
+</style>
+
+</head>
 <body>
 
 <a href="../" class="back-btn">Home</a>
 
-<h1>だれのあし？</h1>
-<h2>Strategy Lab</h2>
+<h2 style="margin:4px 0 2px;">Strategy Lab</h2>
 
-<div>
-  現在カード
-  <div id="cardSelect"></div>
+<!-- 山札（独立） -->
+
+<div id="deckArea">
+  <div id="deckLabel">現在の手札</div>
+  <div id="deckWrap" onclick="openDeckPopup()">
+    <div id="deck">🂠</div>
+    <div id="deckSubLabel">タップして変更</div>
+  </div>
 </div>
+
+<!-- ボード -->
 
 <div id="board"></div>
 
-<button onclick="evaluateBoard()">評価する</button>
+<!-- カード一覧 -->
+
+<div id="cardDeck">
+  <h3>残りカード — ドラッグして配置</h3>
+  <div id="cardTiles"></div>
+</div>
+
+<!-- ゴースト -->
+
+<div id="ghost"></div>
+
+<!-- 山札選択ポップアップ -->
+
+<div id="overlay">
+  <div id="popup">
+    <button id="popupClose" onclick="closePopup()">×</button>
+    <h3>手札を選択</h3>
+    <div class="deckGrid" id="deckGrid"></div>
+  </div>
+</div>
 
 <script>
-const animals = ["🐱","🐶","🐒","🐦","🐸"];
+// 豚なし 6種
+const animals = ["🐱","🐶","🐒","🐦","🐸","🐴"];
 
+let remaining = {};
 let board = Array(9).fill(null);
-let currentCard = { animal: "🐱", type: "BODY" };
+let currentCard = null; // 山札（独立）
+let dragCard = null;    // ドラッグ中のカード（山札とは別）
+let selectedTileCard = null; // タイルタップで選択されたカード
 
 const boardDiv = document.getElementById("board");
-const cardSelect = document.getElementById("cardSelect");
+const ghost    = document.getElementById("ghost");
 
-function init() {
-  renderBoard();
-  renderCardSelect();
+// ===== 初期化 =====
+function buildRemaining() {
+  remaining = {};
+  animals.forEach(a => {
+    remaining[key(a,"BODY")] = 4;
+    remaining[key(a,"FOOT")] = 4;
+  });
+  remaining[key("🃏","JOKER")] = 4;
 }
 
+function key(animal, type) { return animal + "_" + type; }
+function cardKey(c) { return key(c.animal, c.type); }
+
+function fmt(c) {
+  if (!c) return "";
+  if (c.type === "JOKER") return "🃏";
+  if (c.type === "FOOT")  return c.animal + "🐾";
+  return c.animal;
+}
+
+function totalRemaining() {
+  return Object.values(remaining).reduce((a,b) => a+b, 0);
+}
+
+function init() {
+  buildRemaining();
+  renderBoard();
+  renderCardTiles();
+  renderDeck();
+}
+
+// ===== 山札（独立表示） =====
+function renderDeck() {
+  document.getElementById("deck").innerText = currentCard ? fmt(currentCard) : "🂠";
+}
+
+// ===== 山札選択ポップアップ（remainingに連動しない独立選択） =====
+function openDeckPopup() {
+  const grid = document.getElementById("deckGrid");
+  grid.innerHTML = "";
+
+  const cards = [];
+  animals.forEach(a => {
+    cards.push({ animal: a, type: "BODY" });
+    cards.push({ animal: a, type: "FOOT" });
+  });
+  cards.push({ animal: "🃏", type: "JOKER" });
+
+  cards.forEach(c => {
+    const isActive = currentCard && cardKey(currentCard) === cardKey(c);
+    const opt = document.createElement("div");
+    opt.className = "deckOption" + (isActive ? " dActive" : "");
+    opt.innerHTML = `
+      <span>${fmt(c)}</span>
+      <span class="dLabel">${c.type === "BODY" ? "からだ" : c.type === "FOOT" ? "あし" : "ジョーカー"}</span>
+    `;
+    opt.onclick = () => {
+      currentCard = c;
+      renderDeck();
+      evaluateBoard(); // 山札変更時に評価更新
+      closePopup();
+    };
+    grid.appendChild(opt);
+  });
+
+  document.getElementById("overlay").style.display = "flex";
+}
+
+function closePopup() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+// ===== ボード =====
 function renderBoard() {
   boardDiv.innerHTML = "";
   board.forEach((cell, i) => {
     const div = document.createElement("div");
-    div.className = "cell";
-    div.innerText = formatCell(cell);
-    div.onclick = () => {
-    cycleCell(i);
-    evaluateBoard(); // セル変更時に評価を自動実行
-};
+    div.className = "cell" + (cell ? " occupied" : "");
+    div.innerText = fmt(cell);
+
+    // クリック：埋まってれば取り除く。空きはタイル選択後のみ配置
+    div.addEventListener("click", () => {
+      if (board[i]) {
+        removeCard(i);
+      } else if (selectedTileCard) {
+        placeCard(i, selectedTileCard);
+      }
+    });
+
+    // PC ドロップ
+    div.addEventListener("dragover", e => {
+      if (!board[i] && dragCard) { e.preventDefault(); div.classList.add("over"); }
+    });
+    div.addEventListener("dragleave", () => div.classList.remove("over"));
+    div.addEventListener("drop", e => {
+      e.preventDefault();
+      div.classList.remove("over");
+      if (!board[i] && dragCard) placeCard(i, dragCard);
+    });
+
     boardDiv.appendChild(div);
   });
+  evaluateBoard();
 }
 
-function formatCell(c) {
-  if (!c) return "";
-  if (c.type === "JOKER") return "🃏";
-  if (c.type === "BODY") return c.animal;
-  if (c.type === "FOOT") return c.animal + "🐾";
-}
-
-function cycleCell(i) {
-  const c = board[i];
-  if (!c) {
-    board[i] = { animal: "🐱", type: "BODY" };
-  } else if (c.type === "BODY") {
-    board[i] = { animal: c.animal, type: "FOOT" };
-  } else if (c.type === "FOOT") {
-    board[i] = { animal: "🃏", type: "JOKER" };
-  } else {
-    board[i] = null;
-  }
+function placeCard(i, card) {
+  const k = cardKey(card);
+  if ((remaining[k] ?? 0) <= 0) return;
+  board[i] = { ...card };
+  remaining[k]--;
+  selectedTileCard = null;
   renderBoard();
+  renderCardTiles();
 }
 
-function renderCardSelect() {
-  cardSelect.innerHTML = "";
+function removeCard(i) {
+  if (!board[i]) return;
+  remaining[cardKey(board[i])]++;
+  board[i] = null;
+  renderBoard();
+  renderCardTiles();
+}
+
+function resetBoard() {
+  board = Array(9).fill(null);
+  buildRemaining();
+  dragCard = null;
+  selectedTileCard = null;
+  clearTileSelection();
+  renderBoard();
+  renderCardTiles();
+}
+
+// ===== カード一覧（4列グリッド、ドラッグ元） =====
+function renderCardTiles() {
+  const container = document.getElementById("cardTiles");
+  container.innerHTML = "";
+  const total = totalRemaining();
+
+  // BODY行・FOOT行を交互に並べず、全カードを4列グリッドで流し込む
+  const allCards = [];
   animals.forEach(a => {
-    ["BODY", "FOOT"].forEach(t => {
-      const span = document.createElement("span");
-      span.style.margin = "6px";
-      span.style.cursor = "pointer";
-      span.innerText = t === "BODY" ? a : a + "🐾";
-      span.onclick = () => {
-        currentCard = { animal: a, type: t };
-        highlightCard();
-      };
-      cardSelect.appendChild(span);
+    allCards.push({ animal: a, type: "BODY" });
+    allCards.push({ animal: a, type: "FOOT" });
+  });
+  allCards.push({ animal: "🃏", type: "JOKER" });
+
+  allCards.forEach(card => {
+    const k = cardKey(card);
+    const count = remaining[k] ?? 0;
+    const prob  = total > 0 ? Math.round((count / total) * 100) : 0;
+
+    const tile = document.createElement("div");
+    tile.className = "cardTile" + (count === 0 ? " empty" : "");
+    tile.draggable = count > 0;
+    tile.dataset.key = k;
+
+    tile.innerHTML = `
+      <div class="cardEmoji">${fmt(card)}</div>
+
+      <div class="cardCount">残${count}枚</div>
+      <div class="cardProb">${prob}%</div>
+    `;
+
+    // PC D&D — dragCardのみ更新。currentCard（山札）は触らない
+    tile.addEventListener("dragstart", e => {
+      dragCard = { ...card };
+      selectedTileCard = null; // ドラッグ開始時はタップ選択解除
+      clearTileSelection();
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", k);
+      setTimeout(() => tile.classList.add("dragging-src"), 0);
     });
+    tile.addEventListener("dragend", () => {
+      dragCard = null;
+      tile.classList.remove("dragging-src");
+    });
+
+    // タップで選択（モバイル向け：タップ→マスタップで配置）
+    tile.addEventListener("click", () => {
+      if (count === 0) return;
+      if (selectedTileCard && cardKey(selectedTileCard) === k) {
+        // 同じタイルをもう一度タップで選択解除
+        selectedTileCard = null;
+        clearTileSelection();
+      } else {
+        selectedTileCard = { ...card };
+        clearTileSelection();
+        tile.classList.add("selected");
+      }
+    });
+
+    // タッチ D&D（タップ単体はドラッグ扱いにしない）
+    setupTouchDrag(tile, card);
+
+    container.appendChild(tile);
   });
-  const joker = document.createElement("span");
-  joker.innerText = "🃏";
-  joker.style.margin = "6px";
-  joker.style.cursor = "pointer";
-  joker.onclick = () => {
-    currentCard = { animal: "🃏", type: "JOKER" };
-    highlightCard();
-  };
-  cardSelect.appendChild(joker);
-  highlightCard();
 }
 
-function highlightCard() {
-  [...cardSelect.children].forEach(el => { el.style.opacity = "0.3"; });
-  const label = formatCell(currentCard);
-  [...cardSelect.children].forEach(el => {
-    if (el.innerText === label) el.style.opacity = "1";
+// ===== タッチD&D =====
+function setupTouchDrag(el, card) {
+  let active = false;
+
+  el.addEventListener("touchstart", e => {
+    if (el.classList.contains("empty")) return;
+    active = true;
+    dragCard = { ...card };
+    ghost.innerText = fmt(card);
+    ghost.style.display = "block";
+    moveGhost(e.touches[0]);
+  }, { passive: true });
+  el.addEventListener("touchmove", e => {
+    if (!active) return;
+    e.preventDefault();
+    moveGhost(e.touches[0]);
+    clearOver();
+    const t = e.touches[0];
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const cell = target?.closest(".cell");
+    if (cell) {
+      const idx = Array.from(boardDiv.children).indexOf(cell);
+      if (idx >= 0 && !board[idx]) cell.classList.add("over");
+    }
+  }, { passive: false });
+
+  el.addEventListener("touchend", e => {
+    if (!active) return;
+    active = false;
+    ghost.style.display = "none";
+    clearOver();
+    const t = e.changedTouches[0];
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const cell = target?.closest(".cell");
+    if (cell) {
+      const idx = Array.from(boardDiv.children).indexOf(cell);
+      if (idx >= 0 && !board[idx] && dragCard) placeCard(idx, dragCard);
+    }
+    dragCard = null;
   });
 }
 
+function clearTileSelection() {
+  document.querySelectorAll(".cardTile").forEach(el => el.classList.remove("selected"));
+}
+
+function moveGhost(touch) {
+  ghost.style.left = touch.clientX + "px";
+  ghost.style.top  = touch.clientY + "px";
+}
+
+function clearOver() {
+  document.querySelectorAll(".cell.over").forEach(c => c.classList.remove("over"));
+}
+
+// ===== 評価 =====
 function neighbors(i) {
   return [
-    ...(i % 3 !== 0 ? [i - 1] : []),
-    ...(i % 3 !== 2 ? [i + 1] : []),
-    ...(i >= 3 ? [i - 3] : []),
-    ...(i < 6 ? [i + 3] : [])
+    ...(i % 3 !== 0 ? [i-1] : []),
+    ...(i % 3 !== 2 ? [i+1] : []),
+    ...(i >= 3      ? [i-3] : []),
+    ...(i < 6       ? [i+3] : [])
   ];
 }
 
-function evaluateImmediateScore(index, card) {
+function evalScore(index, card) {
   let gain = 0;
   board[index] = card;
   neighbors(index).forEach(n => {
@@ -202,54 +473,47 @@ function evaluateImmediateScore(index, card) {
     if (!o || o.type === "JOKER" || card.type === "JOKER") return;
     if (o.animal === card.animal && o.type !== card.type) gain += 100;
   });
-  const lines = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8]
-  ];
-  lines.forEach(l => {
+  [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8]].forEach(l => {
     if (!l.includes(index)) return;
-    if (l.every(i => board[i] && board[i].animal === card.animal && board[i].type === card.type)) gain += 60;
+    if (l.every(j => board[j] && board[j].animal === card.animal && board[j].type === card.type)) gain += 60;
   });
   board[index] = null;
   return gain;
 }
 
-function positionalPenalty(index) {
+function penalty(index) {
   let p = 0;
-  const near = neighbors(index).filter(n => board[n]).length;
-  if (near >= 3) p += 20;
+  if (neighbors(index).filter(n => board[n]).length >= 3) p += 20;
   if ([0,2,6,8].includes(index)) p += 5;
   return p;
 }
 
 function evaluateBoard() {
-  let raw = Array(9).fill(null);
-  let best = -Infinity;
-  for (let i = 0; i < 9; i++) {
-    if (board[i]) continue;
-    const v = evaluateImmediateScore(i, currentCard) - positionalPenalty(i);
-    raw[i] = v;
-    best = Math.max(best, v);
-  }
-  renderEval(raw);
-}
-
-function renderEval(raw) {
-  const values = raw.filter(v => v !== null);
-  if (values.length === 0) return;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
   for (let i = 0; i < 9; i++) {
     const cell = boardDiv.children[i];
+    if (!cell) continue;
     cell.classList.remove("evalCell");
     cell.querySelector(".evalPercent")?.remove();
-    if (raw[i] === null) continue;
-    const percent = max === min ? 100 : Math.round((raw[i] - min) / (max - min) * 100);
+  }
+  if (!currentCard) return;
+
+  const raw = Array(9).fill(null);
+  for (let i = 0; i < 9; i++) {
+    if (board[i]) continue;
+    raw[i] = evalScore(i, currentCard) - penalty(i);
+  }
+  const vals = raw.filter(v => v !== null);
+  if (!vals.length) return;
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  for (let i = 0; i < 9; i++) {
+    const cell = boardDiv.children[i];
+    if (!cell || raw[i] === null) continue;
+    const pct = mx === mn ? 100 : Math.round((raw[i]-mn)/(mx-mn)*100);
     cell.classList.add("evalCell");
-    const label = document.createElement("div");
-    label.className = "evalPercent";
-    label.innerText = percent + "%";
-    cell.appendChild(label);
+    const lbl = document.createElement("div");
+    lbl.className = "evalPercent";
+    lbl.innerText = pct + "%";
+    cell.appendChild(lbl);
   }
 }
 
