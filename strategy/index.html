@@ -18,8 +18,7 @@ overflow: hidden;
 height: 100vh;
 }
 
-h1 { margin: 6px 0 0; }
-h2 { margin: 0 0 6px; font-weight: normal; }
+h2 { margin: 4px 0 2px; font-weight: normal; }
 
 /* ===== 戻るボタン ===== */
 .back-btn {
@@ -34,7 +33,11 @@ transition: color 0.2s; z-index: 3000;
 .back-btn::before { content: ‘←’; font-size: 16px; }
 
 /* ===== 山札エリア ===== */
-#deckArea { margin: 4px auto 2px; }
+#deckArea {
+position: relative;
+margin: 4px auto 2px;
+width: 300px;
+}
 #deckLabel { font-size: 11px; color: #888; margin-bottom: 2px; }
 #deckWrap {
 display: inline-flex; flex-direction: column;
@@ -59,12 +62,39 @@ cursor: default;
 }
 .cell.over { background: #fff9c4; border-color: #f9a825; border-style: dashed; }
 .cell.occupied { cursor: pointer; }
+.cell.hit { background: #fff176; }
+.cell.vanish {
+animation: vanish 0.35s ease forwards;
+}
+@keyframes vanish {
+0%   { transform: scale(1);   opacity: 1; }
+60%  { transform: scale(1.3); opacity: 0.6; }
+100% { transform: scale(0);   opacity: 0; }
+}
 .evalCell { background: rgba(255,0,0,0.06) !important; }
 .evalPercent {
 position: absolute; inset: 0;
 display: flex; align-items: center; justify-content: center;
 font-size: 15px; font-weight: bold; color: #b00000; pointer-events: none;
 }
+
+/* ===== 1手戻るボタン ===== */
+#undoBtn {
+position: absolute;
+top: 50%; left: 0;
+transform: translateY(-50%);
+padding: 6px 12px;
+font-size: 18px;
+border-radius: 20px;
+border: 1px solid #ccc;
+background: white;
+color: #555;
+cursor: pointer;
+transition: background 0.15s, opacity 0.15s;
+line-height: 1;
+}
+#undoBtn:disabled { opacity: 0.3; cursor: default; }
+#undoBtn:not(:disabled):hover { background: #eee; }
 
 /* ===== カード一覧 ===== */
 #cardDeck { width: 320px; margin: 0 auto; }
@@ -73,14 +103,12 @@ font-size: 11px; color: #888; letter-spacing: 0.1em;
 margin: 4px 0 4px; text-transform: uppercase;
 }
 
-/* 4列グリッド */
 #cardTiles {
 display: grid;
 grid-template-columns: repeat(4, 1fr);
 gap: 6px;
 }
 
-/* カードタイル */
 .cardTile {
 background: white; border: 2px solid #ddd; border-radius: 8px;
 padding: 6px 2px 5px;
@@ -100,9 +128,8 @@ transform: translateY(-2px);
 .cardTile.dragging-src { opacity: 0.35; }
 
 .cardTile .cardEmoji { font-size: 20px; line-height: 1.2; }
-.cardTile .cardType { font-size: 8px; color: #aaa; margin-top: 1px; letter-spacing: 0.04em; }
 .cardTile .cardCount { font-size: 10px; font-weight: bold; color: #555; margin-top: 2px; }
-.cardTile .cardProb { font-size: 10px; color: #ff9800; font-weight: bold; margin-top: 1px; }
+.cardTile .cardProb  { font-size: 10px; color: #ff9800; font-weight: bold; margin-top: 1px; }
 
 /* ===== ゴースト ===== */
 #ghost {
@@ -140,10 +167,8 @@ border: 2px solid #eee; border-radius: 8px; padding: 6px 4px;
 cursor: pointer; transition: border-color .2s, background .2s; font-size: 22px;
 }
 .deckOption .dLabel { font-size: 9px; color: #aaa; margin-top: 2px; }
-.deckOption .dCount { font-size: 10px; color: #888; }
-.deckOption:hover:not(.dEmpty) { border-color: #ff9800; background: #fff8f0; }
+.deckOption:hover { border-color: #ff9800; background: #fff8f0; }
 .deckOption.dActive { border-color: #ff9800; background: #fff3e0; }
-.deckOption.dEmpty { opacity: 0.25; cursor: default; }
 </style>
 
 </head>
@@ -151,11 +176,12 @@ cursor: pointer; transition: border-color .2s, background .2s; font-size: 22px;
 
 <a href="../" class="back-btn">Home</a>
 
-<h2 style="margin:4px 0 2px;">Strategy Lab</h2>
+<h2>Strategy Lab</h2>
 
 <!-- 山札（独立） -->
 
 <div id="deckArea">
+  <button id="undoBtn" onclick="undo()" disabled>↩</button>
   <div id="deckLabel">現在の手札</div>
   <div id="deckWrap" onclick="openDeckPopup()">
     <div id="deck">🂠</div>
@@ -189,17 +215,20 @@ cursor: pointer; transition: border-color .2s, background .2s; font-size: 22px;
 </div>
 
 <script>
-// 豚なし 6種
 const animals = ["🐱","🐶","🐒","🐦","🐸","🐴"];
 
 let remaining = {};
 let board = Array(9).fill(null);
-let currentCard = null; // 山札（独立）
-let dragCard = null;    // ドラッグ中のカード（山札とは別）
-let selectedTileCard = null; // タイルタップで選択されたカード
+let currentCard = null;
+let dragCard = null;
+let selectedTileCard = null;
+
+// 履歴スタック（1手戻り用）
+let history = [];
 
 const boardDiv = document.getElementById("board");
 const ghost    = document.getElementById("ghost");
+const undoBtn  = document.getElementById("undoBtn");
 
 // ===== 初期化 =====
 function buildRemaining() {
@@ -227,28 +256,27 @@ function totalRemaining() {
 
 function init() {
   buildRemaining();
+  history = [];
   renderBoard();
   renderCardTiles();
   renderDeck();
+  updateUndoBtn();
 }
 
-// ===== 山札（独立表示） =====
+// ===== 山札 =====
 function renderDeck() {
   document.getElementById("deck").innerText = currentCard ? fmt(currentCard) : "🂠";
 }
 
-// ===== 山札選択ポップアップ（remainingに連動しない独立選択） =====
 function openDeckPopup() {
   const grid = document.getElementById("deckGrid");
   grid.innerHTML = "";
-
   const cards = [];
   animals.forEach(a => {
     cards.push({ animal: a, type: "BODY" });
     cards.push({ animal: a, type: "FOOT" });
   });
   cards.push({ animal: "🃏", type: "JOKER" });
-
   cards.forEach(c => {
     const isActive = currentCard && cardKey(currentCard) === cardKey(c);
     const opt = document.createElement("div");
@@ -260,12 +288,11 @@ function openDeckPopup() {
     opt.onclick = () => {
       currentCard = c;
       renderDeck();
-      evaluateBoard(); // 山札変更時に評価更新
+      evaluateBoard();
       closePopup();
     };
     grid.appendChild(opt);
   });
-
   document.getElementById("overlay").style.display = "flex";
 }
 
@@ -281,7 +308,6 @@ function renderBoard() {
     div.className = "cell" + (cell ? " occupied" : "");
     div.innerText = fmt(cell);
 
-    // クリック：埋まってれば取り除く。空きはタイル選択後のみ配置
     div.addEventListener("click", () => {
       if (board[i]) {
         removeCard(i);
@@ -290,7 +316,6 @@ function renderBoard() {
       }
     });
 
-    // PC ドロップ
     div.addEventListener("dragover", e => {
       if (!board[i] && dragCard) { e.preventDefault(); div.classList.add("over"); }
     });
@@ -306,41 +331,115 @@ function renderBoard() {
   evaluateBoard();
 }
 
+// ===== 配置・削除 =====
 function placeCard(i, card) {
   const k = cardKey(card);
   if ((remaining[k] ?? 0) <= 0) return;
+
+  // 履歴に現在の状態を保存
+  saveHistory();
+
   board[i] = { ...card };
   remaining[k]--;
   selectedTileCard = null;
+
+  // ペア消去チェック
+  checkPair(i);
+
   renderBoard();
   renderCardTiles();
+  updateUndoBtn();
 }
 
 function removeCard(i) {
   if (!board[i]) return;
+  saveHistory();
   remaining[cardKey(board[i])]++;
   board[i] = null;
   renderBoard();
   renderCardTiles();
+  updateUndoBtn();
 }
 
-function resetBoard() {
-  board = Array(9).fill(null);
-  buildRemaining();
-  dragCard = null;
+// ===== ペア消去 =====
+function neighbors(i) {
+  return [
+    ...(i % 3 !== 0 ? [i-1] : []),
+    ...(i % 3 !== 2 ? [i+1] : []),
+    ...(i >= 3      ? [i-3] : []),
+    ...(i < 6       ? [i+3] : [])
+  ];
+}
+
+function checkPair(placedIndex) {
+  const c = board[placedIndex];
+  if (!c || c.type === "JOKER") return;
+
+  const toRemove = new Set();
+
+  neighbors(placedIndex).forEach(n => {
+    const o = board[n];
+    if (!o || o.type === "JOKER") return;
+    if (o.animal === c.animal && o.type !== c.type) {
+      // ペア成立
+      toRemove.add(placedIndex);
+      toRemove.add(n);
+      // 隣接ジョーカーも消す
+      [...neighbors(placedIndex), ...neighbors(n)].forEach(x => {
+        if (board[x]?.type === "JOKER") toRemove.add(x);
+      });
+    }
+  });
+
+  if (toRemove.size === 0) return;
+
+  // アニメーション後に消去
+  toRemove.forEach(idx => {
+    const cell = boardDiv.children[idx];
+    if (cell) cell.classList.add("vanish");
+  });
+
+  setTimeout(() => {
+    toRemove.forEach(idx => {
+      board[idx] = null; // remainingには戻さない（消去したので）
+    });
+    renderBoard();
+    renderCardTiles();
+  }, 360);
+}
+
+// ===== 1手戻る =====
+function saveHistory() {
+  history.push({
+    board: board.map(c => c ? { ...c } : null),
+    remaining: { ...remaining }
+  });
+  // 履歴は最大10件
+  if (history.length > 10) history.shift();
+}
+
+function undo() {
+  if (history.length === 0) return;
+  const prev = history.pop();
+  board = prev.board;
+  remaining = prev.remaining;
   selectedTileCard = null;
   clearTileSelection();
   renderBoard();
   renderCardTiles();
+  updateUndoBtn();
 }
 
-// ===== カード一覧（4列グリッド、ドラッグ元） =====
+function updateUndoBtn() {
+  undoBtn.disabled = history.length === 0;
+}
+
+// ===== カード一覧 =====
 function renderCardTiles() {
   const container = document.getElementById("cardTiles");
   container.innerHTML = "";
   const total = totalRemaining();
 
-  // BODY行・FOOT行を交互に並べず、全カードを4列グリッドで流し込む
   const allCards = [];
   animals.forEach(a => {
     allCards.push({ animal: a, type: "BODY" });
@@ -360,15 +459,13 @@ function renderCardTiles() {
 
     tile.innerHTML = `
       <div class="cardEmoji">${fmt(card)}</div>
-
       <div class="cardCount">残${count}枚</div>
       <div class="cardProb">${prob}%</div>
     `;
 
-    // PC D&D — dragCardのみ更新。currentCard（山札）は触らない
     tile.addEventListener("dragstart", e => {
       dragCard = { ...card };
-      selectedTileCard = null; // ドラッグ開始時はタップ選択解除
+      selectedTileCard = null;
       clearTileSelection();
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", k);
@@ -379,11 +476,9 @@ function renderCardTiles() {
       tile.classList.remove("dragging-src");
     });
 
-    // タップで選択（モバイル向け：タップ→マスタップで配置）
     tile.addEventListener("click", () => {
       if (count === 0) return;
       if (selectedTileCard && cardKey(selectedTileCard) === k) {
-        // 同じタイルをもう一度タップで選択解除
         selectedTileCard = null;
         clearTileSelection();
       } else {
@@ -393,9 +488,7 @@ function renderCardTiles() {
       }
     });
 
-    // タッチ D&D（タップ単体はドラッグ扱いにしない）
     setupTouchDrag(tile, card);
-
     container.appendChild(tile);
   });
 }
@@ -412,6 +505,7 @@ function setupTouchDrag(el, card) {
     ghost.style.display = "block";
     moveGhost(e.touches[0]);
   }, { passive: true });
+
   el.addEventListener("touchmove", e => {
     if (!active) return;
     e.preventDefault();
@@ -445,26 +539,15 @@ function setupTouchDrag(el, card) {
 function clearTileSelection() {
   document.querySelectorAll(".cardTile").forEach(el => el.classList.remove("selected"));
 }
-
 function moveGhost(touch) {
   ghost.style.left = touch.clientX + "px";
   ghost.style.top  = touch.clientY + "px";
 }
-
 function clearOver() {
   document.querySelectorAll(".cell.over").forEach(c => c.classList.remove("over"));
 }
 
 // ===== 評価 =====
-function neighbors(i) {
-  return [
-    ...(i % 3 !== 0 ? [i-1] : []),
-    ...(i % 3 !== 2 ? [i+1] : []),
-    ...(i >= 3      ? [i-3] : []),
-    ...(i < 6       ? [i+3] : [])
-  ];
-}
-
 function evalScore(index, card) {
   let gain = 0;
   board[index] = card;
@@ -488,6 +571,34 @@ function penalty(index) {
   return p;
 }
 
+function evaluateMove(index, card) {
+  const immediate = evalScore(index, card) - penalty(index);
+  board[index] = card;
+  let futureEV = 0;
+  const cards = [];
+  animals.forEach(a => {
+    cards.push({ animal: a, type: "BODY" });
+    cards.push({ animal: a, type: "FOOT" });
+  });
+  cards.push({ animal: "🃏", type: "JOKER" });
+  cards.forEach(c => {
+    const k = cardKey(c);
+    const count = remaining[k] || 0;
+    const total = totalRemaining();
+    if (count === 0 || total === 0) return;
+    const prob = count / total;
+    let best = -Infinity;
+    for (let i = 0; i < 9; i++) {
+      if (board[i]) continue;
+      const score = evalScore(i, c) - penalty(i);
+      if (score > best) best = score;
+    }
+    if (best > -Infinity) futureEV += best * prob;
+  });
+  board[index] = null;
+  return immediate + futureEV * 0.6;
+}
+
 function evaluateBoard() {
   for (let i = 0; i < 9; i++) {
     const cell = boardDiv.children[i];
@@ -496,11 +607,10 @@ function evaluateBoard() {
     cell.querySelector(".evalPercent")?.remove();
   }
   if (!currentCard) return;
-
   const raw = Array(9).fill(null);
   for (let i = 0; i < 9; i++) {
     if (board[i]) continue;
-   raw[i] = evaluateMove(i,currentCard);
+    raw[i] = evaluateMove(i, currentCard);
   }
   const vals = raw.filter(v => v !== null);
   if (!vals.length) return;
@@ -515,37 +625,6 @@ function evaluateBoard() {
     lbl.innerText = pct + "%";
     cell.appendChild(lbl);
   }
-}
-
-// ===== AI =====
-
-function evaluateMove(index, card){
-  const immediate = evalScore(index, card) - penalty(index);
-  board[index] = card;
-  let futureEV = 0;
-  const cards = [];
-  animals.forEach(a=>{
-    cards.push({animal:a,type:"BODY"});
-    cards.push({animal:a,type:"FOOT"});
-  });
-  cards.push({animal:"🃏",type:"JOKER"});
-  cards.forEach(c=>{
-    const k = cardKey(c);
-    const count = remaining[k] || 0;
-    const total = totalRemaining();
-    if(count===0 || total===0) return;
-    const prob = count/total;
-    let best = -Infinity;
-    for(let i=0;i<9;i++){
-      if(board[i]) continue;
-      const score = evalScore(i,c) - penalty(i);
-      if(score>best) best = score;
-    }
-    if(best>-Infinity) futureEV += best * prob;
-  });
-  board[index] = null;
-  return immediate + futureEV*0.6;
-
 }
 
 init();
