@@ -13,6 +13,10 @@ font-family: -apple-system, sans-serif;
 background: #f5f5f5;
 text-align: center;
 margin: 0; padding: 0;
+}
+
+/* Strategy画面だけスクロール禁止 */
+#screen-strategy {
 overflow: hidden;
 height: 100vh;
 }
@@ -152,24 +156,10 @@ GAME 画面
 padding: 0 0 24px;
 }
 
-/* ヘッダー */
-#g-header {
-display: flex; align-items: center; justify-content: center;
-gap: 20px; margin: 8px auto 4px; width: 300px;
-}
-#g-header h2 { margin: 0; font-weight: normal; font-size: 18px; }
-#g-scoreBox {
-display: flex; flex-direction: column; align-items: center; justify-content: center;
-background: #222; color: white;
-padding: 4px 14px; border-radius: 16px;
-font-size: 13px; font-weight: 600;
-}
-#g-scoreBox span { font-size: 20px; }
-
-/* 山札（Game） */
+/* 山札＋スコア行（Game） */
 #g-deckWrap {
 position: relative; display: inline-flex;
-flex-direction: column; align-items: center; margin: 4px auto;
+flex-direction: column; align-items: center; margin: 8px auto 4px;
 }
 #g-deck { font-size: 44px; line-height: 1; }
 #g-count {
@@ -178,6 +168,15 @@ background: #ff5722; color: white;
 font-size: 12px; font-weight: bold;
 padding: 2px 6px; border-radius: 10px;
 }
+#g-scoreBox {
+position: absolute; top: 50%; right: -90px;
+transform: translateY(-50%);
+display: flex; flex-direction: column; align-items: center; justify-content: center;
+background: #222; color: white;
+padding: 4px 14px; border-radius: 16px;
+font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+#g-scoreBox span { font-size: 20px; }
 
 /* ボード（Game） */
 #g-board {
@@ -188,14 +187,41 @@ gap: 10px; width: 300px; margin: 8px auto;
 /* 残りカード（Game） */
 #g-cardDetail { width: 300px; margin: 4px auto 6px; font-size: 13px; }
 
-/* Restart */
-#g-restartBtn {
-margin: 2px auto; display: block;
-padding: 7px 22px; font-size: 14px;
+/* シミュレーション */
+#g-sim { margin: 12px auto 0; width: 300px; }
+.g-simCount {
+padding: 8px 18px; font-size: 15px;
 border-radius: 20px; border: 1px solid #ccc;
-background: white; color: #555; cursor: pointer;
+background: white; color: #666; cursor: pointer;
 }
-#g-restartBtn:hover { background: #eee; }
+.g-simCount.active { background: #ff9800; color: white; border-color: #ff9800; font-weight: bold; }
+#g-simBtn {
+padding: 8px 24px; font-size: 15px; font-weight: bold;
+border-radius: 20px; border: none;
+background: #333; color: white; cursor: pointer;
+}
+#g-simBtn:hover { background: #111; }
+#g-simResult {
+background: white; border: 1px solid #e0ddd8;
+border-radius: 8px; padding: 8px 12px;
+font-size: 13px; color: #333;
+display: none;
+}
+#g-simResult.visible { display: block; }
+.sim-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.sim-row .sim-label { color: #888; }
+.sim-row .sim-val   { font-weight: bold; }
+.sim-win  { color: #e65c00; }
+
+#g-history {
+margin: 6px auto 0; width: 300px;
+font-size: 13px; text-align: left;
+}
+#g-history summary {
+cursor: pointer; color: #888; font-size: 12px;
+letter-spacing: 0.05em; padding: 2px 0;
+}
+#g-log { margin: 4px 0 0 16px; color: #555; }
 
 /* ============================================================
 共通セル・評価スタイル
@@ -350,20 +376,38 @@ background: #ff9800; color: white; cursor: pointer;
     <span class="arrow-label">STUDY</span>
   </div>
 
-  <div id="g-header">
-    <h2>Game</h2>
-    <div id="g-scoreBox">Score <span id="g-score">0</span></div>
-  </div>
-
   <div id="g-deckWrap">
     <div id="g-deck"></div>
     <div id="g-count"></div>
+    <div id="g-scoreBox">Score <span id="g-score">0</span></div>
   </div>
 
   <div id="g-board"></div>
   <div id="g-cardDetail"></div>
 
-<button id="g-restartBtn" onclick="gInit()">Restart</button>
+  <!-- シミュレーション -->
+
+  <div id="g-sim">
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:15px;color:#666;">シミュレーション</span>
+      <button id="g-simBtn" onclick="gRunSim()">▶ 実行</button>
+    </div>
+    <div style="display:flex;justify-content:center;gap:8px;">
+      <button class="g-simCount active" onclick="gSetSimCount(10,this)">10回</button>
+      <button class="g-simCount"        onclick="gSetSimCount(100,this)">100回</button>
+      <button class="g-simCount"        onclick="gSetSimCount(1000,this)">1000回</button>
+    </div>
+    <div id="g-simResult"></div>
+  </div>
+
+  <!-- スコア履歴 -->
+
+  <div id="g-history">
+    <details>
+      <summary>スコア履歴</summary>
+      <ul id="g-log" style="list-style:none;padding:0;margin-top:4px;"></ul>
+    </details>
+  </div>
 
   <!-- 終了ポップアップ -->
 
@@ -683,6 +727,7 @@ function sEvaluateBoard() {
 let gDeck, gBoard, gCurrentCard, gScore;
 let gScoredLines = new Set();
 let gGameEnded = false;
+let gHistoryCount = 0;
 
 const gBoardDiv = document.getElementById("g-board");
 
@@ -756,7 +801,10 @@ function gRenderDeck() {
   const remMap = gGetRemainingMap();
   renderEval(gBoard, gBoardDiv, gCurrentCard, remMap);
 }
-function gDraw() { gCurrentCard = gDeck.shift() || null; gRenderDeck(); }
+function gDraw() {
+  gCurrentCard = gDeck.shift() || null;
+  gRenderDeck();
+}
 
 function gPlace(i) {
   if (gGameEnded || !gCurrentCard || gBoard[i]) return;
@@ -819,11 +867,152 @@ function gCheckLine() {
 function gEndGame(type) {
   if (gGameEnded) return;
   gGameEnded = true;
+  gHistoryCount++;
+  const li = document.createElement("li");
+  li.style.cssText = "padding:2px 0;border-bottom:1px solid #eee;color:#555;";
+  const clear = gScore >= 15 ? " 🎉" : "";
+  li.innerText = `${gHistoryCount}回目：${gScore}pt${clear}`;
+  document.getElementById("g-log").prepend(li);
   document.getElementById("g-popupTitle").innerText = type === "clear" ? "CLEAR! 🎉" : "Game Over";
   document.getElementById("g-popupMsg").innerText   = `Score: ${gScore}pt — ${type==="clear"?"山札を使い切りました":"これ以上置けません"}`;
   document.getElementById("g-overlay").style.display = "flex";
 }
 function gClosePopup() { document.getElementById("g-overlay").style.display = "none"; gInit(); }
+
+// ============================================================
+// シミュレーション（DOM操作なし・純粋JS）
+// ============================================================
+let gSimCount = 10;
+
+function gSetSimCount(n, el) {
+  gSimCount = n;
+  document.querySelectorAll(".g-simCount").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+}
+
+function gRunSim() {
+  const btn = document.getElementById("g-simBtn");
+  btn.textContent = "実行中…"; btn.disabled = true;
+
+  setTimeout(() => {
+    const scores = [];
+    for (let r = 0; r < gSimCount; r++) {
+      scores.push(gSimulateOne());
+    }
+
+    const wins   = scores.filter(s => s >= 15).length;
+    const avg    = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1);
+    const maxS   = Math.max(...scores);
+    const minS   = Math.min(...scores);
+    const winPct = Math.round((wins / scores.length) * 100);
+
+    const bands = [
+      { label: "0〜4pt",   min:0,  max:4  },
+      { label: "5〜9pt",   min:5,  max:9  },
+      { label: "10〜14pt", min:10, max:14 },
+      { label: "15〜19pt", min:15, max:19 },
+      { label: "20pt〜",   min:20, max:Infinity },
+    ];
+    const distRows = bands.map(b => {
+      const cnt = scores.filter(s => s >= b.min && s <= b.max).length;
+      const pct = Math.round((cnt / scores.length) * 100);
+      return `<div class="sim-row"><span class="sim-label">${b.label}</span><span class="sim-val">${cnt}回 (${pct}%)</span></div>`;
+    }).join("");
+
+    const result = document.getElementById("g-simResult");
+    result.className = "visible";
+    result.innerHTML = `
+      <div class="sim-row"><span class="sim-label">試行回数</span><span class="sim-val">${gSimCount}回</span></div>
+      <div class="sim-row"><span class="sim-label">勝率（15pt以上）</span><span class="sim-val sim-win">${winPct}%（${wins}/${gSimCount}）</span></div>
+      <div class="sim-row"><span class="sim-label">平均スコア</span><span class="sim-val">${avg}pt</span></div>
+      <div class="sim-row"><span class="sim-label">最高 / 最低</span><span class="sim-val">${maxS}pt / ${minS}pt</span></div>
+      <div style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;">${distRows}</div>
+    `;
+
+    btn.textContent = "▶ 実行"; btn.disabled = false;
+  }, 20);
+}
+
+function gSimulateOne() {
+  // 山札生成
+  const deck = [];
+  animals.forEach(a => {
+    for (let i = 0; i < 4; i++) {
+      deck.push({animal:a, type:"BODY"});
+      deck.push({animal:a, type:"FOOT"});
+    }
+  });
+  for (let i = 0; i < 4; i++) deck.push({animal:"🃏", type:"JOKER"});
+  deck.sort(() => Math.random() - 0.5);
+
+  const simBoard = Array(9).fill(null);
+  const simScoredLines = new Set();
+  let simScore = 0;
+
+  function simNeighbors(i) {
+    return [
+      ...(i%3!==0?[i-1]:[]), ...(i%3!==2?[i+1]:[]),
+      ...(i>=3?[i-3]:[]),    ...(i<6?[i+3]:[])
+    ];
+  }
+  function simGetRemMap(cur) {
+    const map = {};
+    animals.forEach(a => { map[a+"_BODY"]=0; map[a+"_FOOT"]=0; });
+    map["🃏_JOKER"] = 0;
+    const list = [...deck];
+    if (cur) list.push(cur);
+    list.forEach(c => { const k=c.animal+"_"+c.type; if(map[k]!==undefined) map[k]++; });
+    return map;
+  }
+  function simCheckPair(idx) {
+    const c = simBoard[idx];
+    if (!c || c.type==="JOKER") return;
+    simNeighbors(idx).forEach(n => {
+      const o = simBoard[n];
+      if (!o || o.type==="JOKER") return;
+      if (o.animal===c.animal && o.type!==c.type) {
+        const targets = new Set([idx, n]);
+        [...simNeighbors(idx),...simNeighbors(n)].forEach(x => { if(simBoard[x]?.type==="JOKER") targets.add(x); });
+        simScore++;
+        targets.forEach(t => { simBoard[t] = null; });
+      }
+    });
+  }
+  function simCheckLine() {
+    [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8]].forEach((l,idx) => {
+      if (simScoredLines.has(idx)) return;
+      if (l.every(i=>simBoard[i]) &&
+          simBoard[l[0]].animal===simBoard[l[1]].animal &&
+          simBoard[l[1]].animal===simBoard[l[2]].animal &&
+          simBoard[l[0]].type===simBoard[l[1]].type &&
+          simBoard[l[1]].type===simBoard[l[2]].type) {
+        simScoredLines.add(idx);
+        simScore++;
+      }
+    });
+  }
+
+  // メインループ
+  while (deck.length > 0) {
+    const card = deck.shift();
+    const empties = simBoard.map((v,i) => v===null?i:null).filter(v=>v!==null);
+    if (empties.length === 0) break;
+
+    // Strategyと同じ evaluateMove を使用
+    const remMap = simGetRemMap(card);
+    let bestScore = -Infinity, bestIdx = empties[0];
+    empties.forEach(i => {
+      const s = evaluateMove(simBoard, remMap, i, card);
+      if (s > bestScore) { bestScore = s; bestIdx = i; }
+    });
+
+    simBoard[bestIdx] = card;
+    simCheckPair(bestIdx);
+    simCheckLine();
+  }
+
+  return simScore;
+}
 
 // ============================================================
 // 起動
