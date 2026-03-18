@@ -202,7 +202,6 @@ background: #333; color: white; cursor: pointer;
 }
 #g-simBtn:hover { background: #111; }
 #g-simResult {
-background: white; border: 1px solid #e0ddd8;
 border-radius: 8px; padding: 8px 12px;
 font-size: 13px; color: #333;
 display: none;
@@ -449,43 +448,133 @@ function evalScore(boardRef, index, card) {
   evalNeighbors(index).forEach(n => {
     const o = boardRef[n];
     if (!o || o.type === "JOKER" || card.type === "JOKER") return;
-    if (o.animal === card.animal && o.type !== card.type) gain += 100;
+    if (o.animal === card.animal && o.type !== card.type) gain += 10000;
   });
   [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8]].forEach(l => {
     if (!l.includes(index)) return;
-    if (l.every(j => boardRef[j] && boardRef[j].animal === card.animal && boardRef[j].type === card.type)) gain += 60;
+    if (l.every(j => boardRef[j] && boardRef[j].animal === card.animal && boardRef[j].type === card.type)) gain += 10;
   });
   boardRef[index] = null;
   return gain;
 }
 function evalPenalty(boardRef, index) {
-  let p = 0;
-  if (evalNeighbors(index).filter(n => boardRef[n]).length >= 3) p += 20;
-  if ([0,2,6,8].includes(index)) p += 5;
-  return p;
+  const near = evalNeighbors(index).filter(n => boardRef[n]).length;
+  const neighborPenalty = [0, 5, 10, 20, 40][near] ?? 40;
+  const cornerPenalty = [0,2,6,8].includes(index) ? 5 : 0;
+  return neighborPenalty + cornerPenalty;
 }
+// 未来評価用（ペアを100点に抑えてバランスをとる）
+let COEF_MATCH = 3;
+
 function evaluateMove(boardRef, remMap, index, card) {
+  return evaluateMoveWith(boardRef, remMap, index, card, COEF_MATCH);
+}
+
+function evaluateMoveWith(boardRef, remMap, index, card, coefMatch) {
   const immediate = evalScore(boardRef, index, card) - evalPenalty(boardRef, index);
+
   boardRef[index] = card;
-  const total = Object.values(remMap).reduce((a,b) => a+b, 0);
-  let futureEV = 0;
-  Object.entries(remMap).forEach(([k, count]) => {
-    if (count === 0 || total === 0) return;
-    const parts = k.split("_");
-    const type   = parts[parts.length - 1];
-    const animal = parts.slice(0, -1).join("_");
-    const c = { animal, type };
-    const prob = count / total;
-    let best = -Infinity;
+
+  // デッキマッチングボーナス
+  let pairableCount = 0;
+  for (let i = 0; i < 9; i++) {
+    const c = boardRef[i];
+    if (!c || c.type === "JOKER") continue;
+    const partnerType = c.type === "BODY" ? "FOOT" : "BODY";
+    const partnerKey  = c.animal + "_" + partnerType;
+    const hasSpace = evalNeighbors(i).some(n => boardRef[n] === null);
+    if (hasSpace) pairableCount += remMap[partnerKey] ?? 0;
+  }
+  const matchBonus = pairableCount * coefMatch;
+
+  // 1手先期待値：ペア消去後の盤面で計算
+  const simB = boardRef.slice();
+  let changed = true;
+  while (changed) {
+    changed = false;
     for (let i = 0; i < 9; i++) {
-      if (boardRef[i]) continue;
-      const s = evalScore(boardRef, i, c) - evalPenalty(boardRef, i);
-      if (s > best) best = s;
+      const sc = simB[i];
+      if (!sc || sc.type === "JOKER") continue;
+      evalNeighbors(i).forEach(n => {
+        const o = simB[n];
+        if (!o || o.type === "JOKER") return;
+        if (o.animal === sc.animal && o.type !== sc.type) {
+          const targets = new Set([i, n]);
+          [...evalNeighbors(i), ...evalNeighbors(n)].forEach(x => {
+            if (simB[x]?.type === "JOKER") targets.add(x);
+          });
+          targets.forEach(t => { simB[t] = null; });
+          changed = true;
+        }
+      });
     }
-    if (best > -Infinity) futureEV += best * prob;
+  }
+
+  // 1手先ペア確率
+  const total = Object.values(remMap).reduce((a,b) => a+b, 0);
+  const pairProb1 = total > 0 ? pairableCount / total : 0;
+
+  // 2手先ペア確率：c1を各マスに置いた後のペア可能枚数の期待値
+  let pairProb2 = 0;
+  Object.entries(remMap).forEach(([k1, count1]) => {
+    if (count1 === 0 || total === 0) return;
+    const parts1 = k1.split("_");
+    const c1 = { animal: parts1.slice(0,-1).join("_"), type: parts1[parts1.length-1] };
+    const prob1 = count1 / total;
+
+    // c1を最善マス（即ペアがあればそこ、なければペナルティ最小のマス）に置く
+    let best1Score = -Infinity, best1Idx = -1;
+    for (let i = 0; i < 9; i++) {
+      if (simB[i]) continue;
+      const s = evalScore(simB, i, c1) - evalPenalty(simB, i);
+      if (s > best1Score) { best1Score = s; best1Idx = i; }
+    }
+    if (best1Idx === -1) return;
+
+    simB[best1Idx] = c1;
+
+    // ペア消去シミュレート
+    let ch = true;
+    while (ch) {
+      ch = false;
+      for (let i = 0; i < 9; i++) {
+        const sc = simB[i];
+        if (!sc || sc.type === "JOKER") continue;
+        evalNeighbors(i).forEach(n => {
+          const o = simB[n];
+          if (!o || o.type === "JOKER") return;
+          if (o.animal === sc.animal && o.type !== sc.type) {
+            const targets = new Set([i, n]);
+            [...evalNeighbors(i), ...evalNeighbors(n)].forEach(x => {
+              if (simB[x]?.type === "JOKER") targets.add(x);
+            });
+            targets.forEach(t => { simB[t] = null; });
+            ch = true;
+          }
+        });
+      }
+    }
+
+    // 消去後の盤面でペア可能枚数を計算
+    const remMap2 = { ...remMap };
+    remMap2[k1] = (remMap2[k1] ?? 1) - 1;
+    const total2 = total - 1;
+    let pairable2 = 0;
+    for (let i = 0; i < 9; i++) {
+      const c = simB[i];
+      if (!c || c.type === "JOKER") continue;
+      const partnerType = c.type === "BODY" ? "FOOT" : "BODY";
+      const partnerKey  = c.animal + "_" + partnerType;
+      const hasSpace = evalNeighbors(i).some(n => simB[n] === null);
+      if (hasSpace) pairable2 += remMap2[partnerKey] ?? 0;
+    }
+
+    simB[best1Idx] = null;
+    pairProb2 += prob1 * (total2 > 0 ? pairable2 / total2 : 0);
   });
+
   boardRef[index] = null;
-  return immediate + futureEV * 0.6;
+  return immediate + (pairProb1 * 500 + pairProb2 * 300) + matchBonus;
 }
 function renderEval(boardRef, boardDivRef, currentCardRef, remMap) {
   if (!currentCardRef) return;
@@ -896,9 +985,7 @@ function gRunSim() {
 
   setTimeout(() => {
     const scores = [];
-    for (let r = 0; r < gSimCount; r++) {
-      scores.push(gSimulateOne());
-    }
+    for (let r = 0; r < gSimCount; r++) scores.push(gSimulateOne());
 
     const wins   = scores.filter(s => s >= 15).length;
     const avg    = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1);
@@ -1014,9 +1101,6 @@ function gSimulateOne() {
   return simScore;
 }
 
-// ============================================================
-// 起動
-// ============================================================
 sInit();
 gInit();
 </script>
