@@ -432,7 +432,7 @@ function showScreen(name) {
 }
 
 // ============================================================
-// 共通：評価エンジン
+// 共通：隣接インデックス
 // ============================================================
 function evalNeighbors(i) {
   return [
@@ -442,6 +442,10 @@ function evalNeighbors(i) {
     ...(i < 6       ? [i+3] : [])
   ];
 }
+
+// ============================================================
+// 共通：即時ペア・ライン得点（変更なし）
+// ============================================================
 function evalScore(boardRef, index, card) {
   let gain = 0;
   boardRef[index] = card;
@@ -457,125 +461,134 @@ function evalScore(boardRef, index, card) {
   boardRef[index] = null;
   return gain;
 }
-function evalPenalty(boardRef, index) {
-  const near = evalNeighbors(index).filter(n => boardRef[n]).length;
-  const neighborPenalty = [0, 5, 10, 20, 40][near] ?? 40;
-  const cornerPenalty = [0,2,6,8].includes(index) ? 5 : 0;
-  return neighborPenalty + cornerPenalty;
-}
-// 未来評価用（ペアを100点に抑えてバランスをとる）
-let COEF_MATCH = 3;
 
-function evaluateMove(boardRef, remMap, index, card) {
-  return evaluateMoveWith(boardRef, remMap, index, card, COEF_MATCH);
-}
+// ============================================================
+// 共通：評価エンジン（新実装）
+// ============================================================
 
-function evaluateMoveWith(boardRef, remMap, index, card, coefMatch) {
-  const immediate = evalScore(boardRef, index, card) - evalPenalty(boardRef, index);
-
-  boardRef[index] = card;
-
-  // デッキマッチングボーナス
-  let pairableCount = 0;
-  for (let i = 0; i < 9; i++) {
-    const c = boardRef[i];
-    if (!c || c.type === "JOKER") continue;
-    const partnerType = c.type === "BODY" ? "FOOT" : "BODY";
-    const partnerKey  = c.animal + "_" + partnerType;
-    const hasSpace = evalNeighbors(i).some(n => boardRef[n] === null);
-    if (hasSpace) pairableCount += remMap[partnerKey] ?? 0;
-  }
-  const matchBonus = pairableCount * coefMatch;
-
-  // 1手先期待値：ペア消去後の盤面で計算
-  const simB = boardRef.slice();
+// 補助：ペア除去後の盤面を返す（副作用なし）
+function applyPairsToBoard(board) {
+  const b = board.slice();
   let changed = true;
   while (changed) {
     changed = false;
     for (let i = 0; i < 9; i++) {
-      const sc = simB[i];
-      if (!sc || sc.type === "JOKER") continue;
+      const c = b[i];
+      if (!c || c.type === "JOKER") continue;
       evalNeighbors(i).forEach(n => {
-        const o = simB[n];
+        const o = b[n];
         if (!o || o.type === "JOKER") return;
-        if (o.animal === sc.animal && o.type !== sc.type) {
+        if (o.animal === c.animal && o.type !== c.type) {
           const targets = new Set([i, n]);
           [...evalNeighbors(i), ...evalNeighbors(n)].forEach(x => {
-            if (simB[x]?.type === "JOKER") targets.add(x);
+            if (b[x]?.type === "JOKER") targets.add(x);
           });
-          targets.forEach(t => { simB[t] = null; });
+          targets.forEach(t => { b[t] = null; });
           changed = true;
         }
       });
     }
   }
+  return b;
+}
 
-  // 1手先ペア確率
-  const total = Object.values(remMap).reduce((a,b) => a+b, 0);
-  const pairProb1 = total > 0 ? pairableCount / total : 0;
-
-  // 2手先ペア確率：c1を各マスに置いた後のペア可能枚数の期待値
-  let pairProb2 = 0;
-  Object.entries(remMap).forEach(([k1, count1]) => {
-    if (count1 === 0 || total === 0) return;
-    const parts1 = k1.split("_");
-    const c1 = { animal: parts1.slice(0,-1).join("_"), type: parts1[parts1.length-1] };
-    const prob1 = count1 / total;
-
-    // c1を最善マス（即ペアがあればそこ、なければペナルティ最小のマス）に置く
-    let best1Score = -Infinity, best1Idx = -1;
-    for (let i = 0; i < 9; i++) {
-      if (simB[i]) continue;
-      const s = evalScore(simB, i, c1) - evalPenalty(simB, i);
-      if (s > best1Score) { best1Score = s; best1Idx = i; }
-    }
-    if (best1Idx === -1) return;
-
-    simB[best1Idx] = c1;
-
-    // ペア消去シミュレート
-    let ch = true;
-    while (ch) {
-      ch = false;
-      for (let i = 0; i < 9; i++) {
-        const sc = simB[i];
-        if (!sc || sc.type === "JOKER") continue;
-        evalNeighbors(i).forEach(n => {
-          const o = simB[n];
-          if (!o || o.type === "JOKER") return;
-          if (o.animal === sc.animal && o.type !== sc.type) {
-            const targets = new Set([i, n]);
-            [...evalNeighbors(i), ...evalNeighbors(n)].forEach(x => {
-              if (simB[x]?.type === "JOKER") targets.add(x);
-            });
-            targets.forEach(t => { simB[t] = null; });
-            ch = true;
-          }
-        });
-      }
-    }
-
-    // 消去後の盤面でペア可能枚数を計算
-    const remMap2 = { ...remMap };
-    remMap2[k1] = (remMap2[k1] ?? 1) - 1;
-    const total2 = total - 1;
-    let pairable2 = 0;
-    for (let i = 0; i < 9; i++) {
-      const c = simB[i];
-      if (!c || c.type === "JOKER") continue;
-      const partnerType = c.type === "BODY" ? "FOOT" : "BODY";
-      const partnerKey  = c.animal + "_" + partnerType;
-      const hasSpace = evalNeighbors(i).some(n => simB[n] === null);
-      if (hasSpace) pairable2 += remMap2[partnerKey] ?? 0;
-    }
-
-    simB[best1Idx] = null;
-    pairProb2 += prob1 * (total2 > 0 ? pairable2 / total2 : 0);
+// 補助A: min(need, supply)
+// 動物ごとに「盤面の受け口数」と「デッキ残り枚数」を min() でキャップし
+// 実現可能な最大ペア数を返す（過大評価を防ぐ）
+function boardPairPotential(boardRef, remMap) {
+  const need = {};
+  for (let i = 0; i < 9; i++) {
+    const c = boardRef[i];
+    if (!c || c.type === "JOKER") continue;
+    if (!evalNeighbors(i).some(n => boardRef[n] === null)) continue;
+    if (!need[c.animal]) need[c.animal] = { BODY: 0, FOOT: 0 };
+    need[c.animal][c.type]++;
+  }
+  let potential = 0;
+  Object.entries(need).forEach(([animal, cnt]) => {
+    potential += Math.min(cnt.BODY, remMap[animal + "_FOOT"] ?? 0);
+    potential += Math.min(cnt.FOOT, remMap[animal + "_BODY"] ?? 0);
   });
+  return potential;
+}
+
+// 補助B: 次カード期待値
+// 次に来るカードが盤面でペアになれる確率（デッキ構成の確率加重）
+function expectedPairsFromDeck(boardRef, remMap) {
+  const total = Object.values(remMap).reduce((a, b) => a + b, 0);
+  if (total === 0) return 0;
+  let exp = 0;
+  animals.forEach(animal => {
+    ["BODY", "FOOT"].forEach(type => {
+      const count = remMap[animal + "_" + type] ?? 0;
+      if (count === 0) return;
+      const prob = count / total;
+      const partnerType = type === "BODY" ? "FOOT" : "BODY";
+      let canPair = false;
+      for (let i = 0; i < 9; i++) {
+        const c = boardRef[i];
+        if (!c || c.animal !== animal || c.type !== partnerType) continue;
+        if (evalNeighbors(i).some(n => boardRef[n] === null)) { canPair = true; break; }
+      }
+      if (canPair) exp += prob;
+    });
+  });
+  return exp;
+}
+
+// 補助C: 超幾何近似
+// P(deckSize枚中partnerCount枚が slots枚以内に1枚以上来る)
+// ≈ 1 - ((deckSize - partnerCount) / deckSize)^slots
+function hypergeoApprox(deckSize, partnerCount, slots) {
+  if (deckSize === 0 || partnerCount === 0) return 0;
+  const p = Math.max(0, (deckSize - partnerCount) / deckSize);
+  return 1 - Math.pow(p, Math.min(slots, deckSize));
+}
+
+// メイン評価関数
+function evaluateMove(boardRef, remMap, index, card) {
+  // 1. 即時ペアスコア（最優先）
+  const immediate = evalScore(boardRef, index, card);
+
+  // 配置＋ペア除去後の盤面を計算
+  boardRef[index] = card;
+  const afterBoard = applyPairsToBoard(boardRef.slice());
+  const deckTotal  = Object.values(remMap).reduce((a, b) => a + b, 0);
+
+  // 2. min(need, supply)：実現可能な最大ペア数
+  const minPot = boardPairPotential(afterBoard, remMap);
+
+  // 3. 次カードがペアになれる確率
+  const expNext = expectedPairsFromDeck(afterBoard, remMap);
+
+  // 4. このカード自身が将来ペアになれる超幾何近似確率
+  let myPairProb = 0;
+  if (card.type !== "JOKER") {
+    const partnerType  = card.type === "BODY" ? "FOOT" : "BODY";
+    const partnerCount = remMap[card.animal + "_" + partnerType] ?? 0;
+    const emptySlots   = afterBoard.filter(v => v === null).length;
+    myPairProb = hypergeoApprox(deckTotal, partnerCount, emptySlots * 2);
+  }
+
+  // 5. デッドロックペナルティ（同type同動物が隣接）
+  let deadlock = 0;
+  if (card.type !== "JOKER") {
+    evalNeighbors(index).forEach(n => {
+      const o = boardRef[n];
+      if (!o || o.type === "JOKER") return;
+      if (o.animal === card.animal && o.type === card.type) deadlock++;
+    });
+  }
 
   boardRef[index] = null;
-  return immediate + (pairProb1 * 500 + pairProb2 * 300) + matchBonus;
+
+  return immediate
+    + minPot     * 400   // 実現可能ペア数（最重要）
+    + expNext    * 100   // 次カード期待値
+    + myPairProb * 150   // 自分のペア期待値（超幾何）
+    - deadlock   * 60;   // デッドロック抑制
 }
+
 function renderEval(boardRef, boardDivRef, currentCardRef, remMap) {
   if (!currentCardRef) return;
   const raw = Array(9).fill(null);
@@ -600,6 +613,7 @@ function renderEval(boardRef, boardDivRef, currentCardRef, remMap) {
     cell.appendChild(lbl);
   }
 }
+
 function fmt(c) {
   if (!c) return "";
   if (c.type === "JOKER") return "🃏";
@@ -858,7 +872,6 @@ function gRenderBoard() {
     cell.onclick = () => gPlace(i);
     gBoardDiv.appendChild(cell);
   });
-  // 評価表示
   const remMap = gGetRemainingMap();
   renderEval(gBoard, gBoardDiv, gCurrentCard, remMap);
 }
@@ -1021,7 +1034,6 @@ function gRunSim() {
 }
 
 function gSimulateOne() {
-  // 山札生成
   const deck = [];
   animals.forEach(a => {
     for (let i = 0; i < 4; i++) {
@@ -1079,13 +1091,11 @@ function gSimulateOne() {
     });
   }
 
-  // メインループ
   while (deck.length > 0) {
     const card = deck.shift();
     const empties = simBoard.map((v,i) => v===null?i:null).filter(v=>v!==null);
     if (empties.length === 0) break;
 
-    // Strategyと同じ evaluateMove を使用
     const remMap = simGetRemMap(card);
     let bestScore = -Infinity, bestIdx = empties[0];
     empties.forEach(i => {
